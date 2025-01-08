@@ -1,18 +1,10 @@
-name: "Template for deploying Azure resources"
+name: "Template for deploying resources"
 
 on:
-  workflow_call:
+  workflow_call: 
     inputs:
       subscription_id:
         description: 'The Azure subscription ID'
-        required: true
-        type: string
-      client_id:
-        description: 'The Azure client ID'
-        required: true
-        type: string
-      tenant_id:
-        description: 'The Azure tenant ID'
         required: true
         type: string
       deployment_name:
@@ -34,15 +26,13 @@ on:
         required: false
         type: string
 
-permissions:
-  id-token: write
-  contents: read
-
 env:
   IS_PULL_REQUEST: "${{ github.event_name == 'pull_request' }}"
 
 jobs:
-  deploy_resources:
+
+  whatif: 
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
@@ -52,8 +42,36 @@ jobs:
     - name: "OIDC Login To Tenant"
       uses: azure/login@v2
       with:
-        client-id: ${{ inputs.client_id }}
-        tenant-id: ${{ inputs.tenant_id }}
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ inputs.subscription_id }}
+        enable-AzPSSession: true
+    - name: Whatif - Infra Deployment
+      uses: azure/bicep-deploy@v1
+      if: github.event_name == 'pull_request'
+      with:
+        type: "deployment"
+        operation: whatIf
+        name: ${{ inputs.deployment_name }}
+        location: ${{ inputs.location }}
+        scope: subscription
+        subscription-id: ${{ inputs.subscription_id }}
+        template-file: ${{ inputs.template_file }}
+        parameters-file: ${{ inputs.parameters_file }}
+        
+  deploy_resources:
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: "OIDC Login To Tenant"
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ inputs.subscription_id }}
         enable-AzPSSession: true
     - name: Infra Deployment
